@@ -1,0 +1,837 @@
+-- ============================================================
+-- WAREHOUSE SCALING: NODES vs CLUSTERS — DEEP DIVE
+-- ============================================================
+
+
+-- ============================================================
+-- LEVEL 1: WHAT IS A NODE?
+-- ============================================================
+--
+-- A node is a single virtual machine with:
+--   - CPU cores (for computation)
+--   - RAM (for in-memory processing)
+--   - Local SSD (for caching data from storage)
+--
+-- When a query runs, the data is split into chunks.
+-- Each node gets a chunk and processes it independently.
+-- This is called MPP (Massively Parallel Processing).
+--
+-- Think of it like a math exam:
+--   - 100 questions to solve
+--   - 1 student (1 node) = takes 100 minutes
+--   - 4 students (4 nodes) = each does 25 questions = done in ~25 minutes
+--   - 8 students (8 nodes) = each does 12-13 questions = done in ~13 minutes
+
+
+-- ============================================================
+-- LEVEL 2: HOW QUERY EXECUTION WORKS ON MULTIPLE NODES
+-- ============================================================
+--
+-- Example: SELECT COUNT(*) FROM orders WHERE amount > 100;
+-- Table has 1000 micro-partitions.
+--
+-- X-SMALL (1 node):
+-- ┌─────────────────────────────────────────────────────────┐
+-- │ Node 1: Scans ALL 1000 partitions → count = 50000      │
+-- └─────────────────────────────────────────────────────────┘
+-- Total time: 60 seconds
+--
+--
+-- SMALL (2 nodes):
+-- ┌─────────────────────────────────────┐
+-- │ Node 1: Scans partitions 1-500      │ → partial count = 24000
+-- └─────────────────────────────────────┘
+-- ┌─────────────────────────────────────┐
+-- │ Node 2: Scans partitions 501-1000   │ → partial count = 26000
+-- └─────────────────────────────────────┘
+-- Combine: 24000 + 26000 = 50000
+-- Total time: ~30 seconds
+--
+--
+-- MEDIUM (4 nodes):
+-- ┌───────────────────┐
+-- │ Node 1: 1-250     │ → 12000
+-- └───────────────────┘
+-- ┌───────────────────┐
+-- │ Node 2: 251-500   │ → 12000
+-- └───────────────────┘
+-- ┌───────────────────┐
+-- │ Node 3: 501-750   │ → 13000
+-- └───────────────────┘
+-- ┌───────────────────┐
+-- │ Node 4: 751-1000  │ → 13000
+-- └───────────────────┘
+-- Combine: 12000+12000+13000+13000 = 50000
+-- Total time: ~15 seconds
+--
+--
+-- LARGE (8 nodes):
+-- Each node scans 125 partitions
+-- Total time: ~8 seconds
+--
+--
+-- KEY INSIGHT:
+-- More nodes = same query finishes FASTER
+-- Data is split among nodes, each does less work
+-- This is VERTICAL SCALING (bigger warehouse size)
+
+
+-- ============================================================
+-- LEVEL 3: WHAT HAPPENS WITH COMPLEX QUERIES (JOINs)?
+-- ============================================================
+--
+-- SELECT c.name, SUM(o.amount)
+-- FROM customers c JOIN orders o ON c.id = o.customer_id
+-- GROUP BY c.name;
+--
+-- MEDIUM (4 nodes):
+--
+-- STEP 1: SCAN (parallel)
+-- ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐
+-- │ Node 1   │ │ Node 2   │ │ Node 3   │ │ Node 4   │
+-- │ Scan     │ │ Scan     │ │ Scan     │ │ Scan     │
+-- │ orders   │ │ orders   │ │ orders   │ │ orders   │
+-- │ part 1-25│ │ part26-50│ │ part51-75│ │part76-100│
+-- └──────────┘ └──────────┘ └──────────┘ └──────────┘
+--
+-- STEP 2: SHUFFLE/REDISTRIBUTE (data exchange between nodes)
+-- Nodes exchange rows so that all rows for same customer_id
+-- end up on the SAME node (needed for JOIN and GROUP BY)
+-- ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐
+-- │ Node 1   │ │ Node 2   │ │ Node 3   │ │ Node 4   │
+-- │ Cust A-F │ │ Cust G-M │ │ Cust N-S │ │ Cust T-Z │
+-- └──────────┘ └──────────┘ └──────────┘ └──────────┘
+--
+-- STEP 3: JOIN + AGGREGATE (parallel, no more exchange needed)
+-- Each node joins + groups its portion independently
+--
+-- STEP 4: COMBINE final results
+--
+-- MORE NODES = each step is faster because less data per node
+-- BUT shuffle step adds network overhead between nodes
+
+
+-- ============================================================
+-- LEVEL 4: WHAT IS A CLUSTER?
+-- ============================================================
+--
+-- A cluster = one COMPLETE warehouse (all its nodes together)
+-- It's a fully independent execution unit.
+--
+-- MEDIUM warehouse = 1 cluster of 4 nodes
+--
+-- ┌──────────────────────────────────────────┐
+-- │            CLUSTER 1                      │
+-- │  ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐   │
+-- │  │Node 1│ │Node 2│ │Node 3│ │Node 4│   │
+-- │  └──────┘ └──────┘ └──────┘ └──────┘   │
+-- └──────────────────────────────────────────┘
+--
+-- All queries submitted to this warehouse share this 1 cluster.
+-- If Query A is using all 4 nodes, Query B waits in queue.
+
+
+-- ============================================================
+-- LEVEL 5: INCREASING CLUSTERS (HORIZONTAL SCALING)
+-- ============================================================
+--
+-- MEDIUM warehouse, MAX_CLUSTER_COUNT = 3:
+--
+-- Idle state (MIN_CLUSTER_COUNT = 1):
+-- ┌──────────────────────────────────────────┐
+-- │            CLUSTER 1 (running)            │
+-- │  ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐   │
+-- │  │Node 1│ │Node 2│ │Node 3│ │Node 4│   │
+-- │  └──────┘ └──────┘ └──────┘ └──────┘   │
+-- └──────────────────────────────────────────┘
+-- Cluster 2: OFF (suspended)
+-- Cluster 3: OFF (suspended)
+--
+--
+-- 1 query arrives → runs on Cluster 1:
+-- ┌──────────────────────────────────────────┐
+-- │            CLUSTER 1                      │
+-- │  [Node1:QueryA][Node2:QueryA]            │
+-- │  [Node3:QueryA][Node4:QueryA]            │
+-- └──────────────────────────────────────────┘
+--
+--
+-- 5 queries arrive simultaneously → Cluster 1 busy → scale up:
+-- ┌──────────────────────────────────────────┐
+-- │            CLUSTER 1                      │
+-- │  [Node1:QueryA][Node2:QueryA]            │
+-- │  [Node3:QueryA][Node4:QueryA]            │
+-- └──────────────────────────────────────────┘
+-- ┌──────────────────────────────────────────┐
+-- │            CLUSTER 2 (just started)       │
+-- │  [Node1:QueryB][Node2:QueryB]            │
+-- │  [Node3:QueryC][Node4:QueryC]            │
+-- └──────────────────────────────────────────┘
+--
+--
+-- 10 queries arrive → all 3 clusters active:
+-- ┌──────────────────────────────────────────┐
+-- │            CLUSTER 1                      │
+-- │  Running: Query A, D, G                   │
+-- └──────────────────────────────────────────┘
+-- ┌──────────────────────────────────────────┐
+-- │            CLUSTER 2                      │
+-- │  Running: Query B, E, H                   │
+-- └──────────────────────────────────────────┘
+-- ┌──────────────────────────────────────────┐
+-- │            CLUSTER 3                      │
+-- │  Running: Query C, F, I                   │
+-- └──────────────────────────────────────────┘
+--
+-- Load drops → clusters scale back down to 1.
+--
+-- KEY INSIGHT:
+-- Each query STILL only uses 4 nodes (one cluster).
+-- But 3 queries can run SIMULTANEOUSLY instead of queuing.
+-- This is HORIZONTAL SCALING (more concurrency, NOT more speed).
+
+
+-- ============================================================
+-- LEVEL 6: SCALING POLICIES
+-- ============================================================
+--
+-- STANDARD policy:
+-- ┌─────────────────────────────────────────────────────────────┐
+-- │ Time 0:00  Query queued → immediately start new cluster     │
+-- │ Time 0:01  New cluster provisioning (~30-60 seconds)        │
+-- │ Time 0:30  New cluster ready → query starts                 │
+-- │ ...                                                         │
+-- │ Time 5:00  No queries waiting → cluster idles               │
+-- │ Time 7:00  2-3 min idle → cluster shuts down                │
+-- └─────────────────────────────────────────────────────────────┘
+-- BEST FOR: User-facing applications (minimize wait time)
+--
+--
+-- ECONOMY policy:
+-- ┌─────────────────────────────────────────────────────────────┐
+-- │ Time 0:00  Query queued → wait...                           │
+-- │ Time 3:00  Still queued → wait...                           │
+-- │ Time 6:00  6 min queued → NOW start new cluster             │
+-- │ Time 6:30  New cluster ready → query starts                 │
+-- │ ...                                                         │
+-- │ Time 15:00 No queries for 5-6 min → cluster shuts down      │
+-- └─────────────────────────────────────────────────────────────┘
+-- BEST FOR: Batch workloads (save credits, okay to wait)
+
+
+-- ============================================================
+-- LEVEL 7: SIZE vs CLUSTERS — SIDE BY SIDE COMPARISON
+-- ============================================================
+--
+-- SCENARIO: 10 users each run a query that scans 1TB
+--
+-- Option A: X-LARGE (16 nodes), 1 cluster
+-- ┌─────────────────────────────────────────────────────────────┐
+-- │ 16 nodes working on 1 query at a time                       │
+-- │ Each query: fast (~10 sec)                                  │
+-- │ But queries run one after another (serial)                  │
+-- │ Total time for 10 queries: ~100 sec                         │
+-- │ Cost: 16 credits/hour                                       │
+-- └─────────────────────────────────────────────────────────────┘
+--
+-- Option B: MEDIUM (4 nodes), 4 clusters
+-- ┌─────────────────────────────────────────────────────────────┐
+-- │ 4 clusters × 4 nodes = 16 nodes total (same hardware!)     │
+-- │ Each query: slower (~40 sec) but 4 run simultaneously       │
+-- │ Batch 1: Queries 1,2,3,4 start together → done at 40 sec   │
+-- │ Batch 2: Queries 5,6,7,8 start at 40 sec → done at 80 sec  │
+-- │ Batch 3: Queries 9,10 start at 80 sec → done at 120 sec    │
+-- │ Total time: ~120 sec                                        │
+-- │ Cost: 4 credits/hour × 4 clusters = 16 credits/hour        │
+-- └─────────────────────────────────────────────────────────────┘
+--
+-- Option C: LARGE (8 nodes), 2 clusters
+-- ┌─────────────────────────────────────────────────────────────┐
+-- │ 2 clusters × 8 nodes = 16 nodes total                      │
+-- │ Each query: medium (~20 sec) and 2 run simultaneously       │
+-- │ Total time: ~100 sec                                        │
+-- │ Cost: 8 credits/hour × 2 clusters = 16 credits/hour        │
+-- └─────────────────────────────────────────────────────────────┘
+--
+-- ALL THREE COST THE SAME! (16 credits/hour)
+-- The difference is the EXPERIENCE:
+--   Option A: Fast per-query, but users wait in line
+--   Option B: Slower per-query, but everyone starts immediately
+--   Option C: Balanced
+
+
+-- ============================================================
+-- LEVEL 8: REAL-WORLD ANALOGY
+-- ============================================================
+--
+-- Restaurant kitchen:
+--
+-- NODE = one chef
+-- CLUSTER = one complete kitchen (with all its chefs)
+-- WAREHOUSE = the restaurant
+--
+-- SIZE (more nodes):
+--   Small kitchen: 2 chefs → one order takes 10 min
+--   Large kitchen: 8 chefs → one order takes 3 min
+--   (more hands on the SAME dish = faster per order)
+--
+-- CLUSTERS (more kitchens):
+--   1 kitchen:  handles 1 order at a time, others wait
+--   3 kitchens: handles 3 orders simultaneously
+--   (each kitchen still takes same time per order)
+--
+-- Scaling decisions:
+--   "My steak takes 30 min" → bigger kitchen (more chefs per order)
+--   "50 people ordered at once" → more kitchens (parallel orders)
+
+
+-- ============================================================
+-- LEVEL 9: SQL EXAMPLES
+-- ============================================================
+
+-- Vertical scaling: make each query faster
+ALTER WAREHOUSE my_wh SET WAREHOUSE_SIZE = 'LARGE';  -- 8 nodes per cluster
+
+-- Horizontal scaling: handle more concurrent queries
+ALTER WAREHOUSE my_wh SET MAX_CLUSTER_COUNT = 5;
+
+-- Both: fast queries + high concurrency
+ALTER WAREHOUSE my_wh SET
+    WAREHOUSE_SIZE = 'LARGE',
+    MIN_CLUSTER_COUNT = 1,
+    MAX_CLUSTER_COUNT = 4,
+    SCALING_POLICY = 'STANDARD';
+
+-- Check current state
+SHOW WAREHOUSES LIKE 'MY_WH';
+
+-- See if queries are queuing (sign you need more clusters)
+SELECT
+    WAREHOUSE_NAME,
+    AVG(QUEUED_OVERLOAD_TIME) AS AVG_QUEUE_MS,
+    COUNT(*) AS QUERY_COUNT
+FROM SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY
+WHERE START_TIME > DATEADD(HOUR, -24, CURRENT_TIMESTAMP())
+GROUP BY WAREHOUSE_NAME
+HAVING AVG_QUEUE_MS > 0
+ORDER BY AVG_QUEUE_MS DESC;
+
+
+-- ============================================================
+-- SUMMARY TABLE
+-- ============================================================
+--
+-- | Action              | What changes        | Effect                    | When to use              |
+-- |---------------------|---------------------|---------------------------|--------------------------|
+-- | Increase SIZE       | More nodes/cluster  | Single query runs faster  | Query is slow            |
+-- | Increase CLUSTERS   | More clusters       | More queries run at once  | Queries are queuing      |
+-- | Increase both       | More of everything  | Fast + concurrent         | Both problems exist      |
+-- | Decrease SIZE       | Fewer nodes/cluster | Save cost, slower queries | Over-provisioned         |
+-- | Decrease CLUSTERS   | Fewer clusters      | Save cost, more queuing   | Low concurrency periods  |
+-- ============================================================
+
+
+-- ============================================================
+-- LEVEL 10: CPU, RAM, AND LOCAL SSD — WHAT THEY ARE & WHY
+-- ============================================================
+--
+-- Each node (virtual machine) has 3 core components:
+--
+-- ┌─────────────────────────────────────────────────┐
+-- │                  ONE NODE                        │
+-- │                                                 │
+-- │  ┌─────────┐   ┌─────────┐   ┌─────────────┐  │
+-- │  │   CPU   │   │   RAM   │   │  LOCAL SSD  │  │
+-- │  │(compute)│   │(memory) │   │  (cache)    │  │
+-- │  └─────────┘   └─────────┘   └─────────────┘  │
+-- │                                                 │
+-- └─────────────────────────────────────────────────┘
+--
+--
+-- ============================================================
+-- CPU (Central Processing Unit)
+-- ============================================================
+--
+-- WHAT: The "brain" of the node — performs all calculations
+--
+-- WHAT IT DOES IN SNOWFLAKE:
+--   - Filtering rows (WHERE amount > 100)
+--   - Computing expressions (SALARY * 1.1)
+--   - Joining tables (hash joins, merge joins)
+--   - Aggregations (SUM, COUNT, AVG, GROUP BY)
+--   - Sorting (ORDER BY)
+--   - Hashing (for hash joins, GROUP BY distribution)
+--   - Compression/decompression of data
+--
+-- ANALOGY:
+--   CPU = the chef's HANDS
+--   Does the actual chopping, cooking, mixing
+--
+-- WHEN CPU IS THE BOTTLENECK:
+--   - Complex math operations on billions of rows
+--   - Heavy string operations (REGEXP, LIKE '%pattern%')
+--   - Many JOINs and aggregations
+--   - Symptom: query takes long but no spilling to disk
+--
+--
+-- ============================================================
+-- RAM (Random Access Memory)
+-- ============================================================
+--
+-- WHAT: Fast, temporary workspace for active data
+--
+-- WHAT IT DOES IN SNOWFLAKE:
+--   - Holds data currently being processed by CPU
+--   - Stores intermediate results (partial aggregations)
+--   - Hash tables for JOIN operations
+--   - Sort buffers for ORDER BY
+--   - Temporary results between query stages
+--
+-- ANALOGY:
+--   RAM = the chef's COUNTERTOP
+--   Where ingredients sit while being actively worked on
+--   Limited space — if you run out, you put things on the floor (SSD)
+--
+-- HOW DATA FLOWS THROUGH RAM:
+--
+--   Cloud Storage (S3/Azure/GCS)
+--           │
+--           ▼
+--   Local SSD (cache)
+--           │
+--           ▼
+--   RAM (active processing)  ←── CPU reads/writes here
+--           │
+--           ▼
+--   Results sent back to user
+--
+-- WHEN RAM IS THE BOTTLENECK:
+--   - Large JOINs (huge hash tables don't fit in memory)
+--   - Large GROUP BY with many distinct values
+--   - Wide rows (many columns) × many rows
+--   - Symptom: BYTES_SPILLED_TO_LOCAL_STORAGE > 0 in query profile
+--   - Data overflows from RAM → spills to Local SSD → SLOWER
+--
+-- SPILLING CHAIN:
+--   RAM full → spill to LOCAL SSD (slower)
+--   Local SSD full → spill to REMOTE STORAGE (much slower!)
+--
+-- ┌─────────┐    ┌───────────┐    ┌────────────────┐
+-- │   RAM   │ →  │ Local SSD │ →  │ Remote Storage │
+-- │  Fast   │    │  Medium   │    │     Slow       │
+-- │(nanosec)│    │(microsec) │    │ (millisec)     │
+-- └─────────┘    └───────────┘    └────────────────┘
+--    ~100GB         ~1TB              Unlimited
+--   per node       per node          (S3/Azure/GCS)
+--
+--
+-- ============================================================
+-- LOCAL SSD (Solid State Drive)
+-- ============================================================
+--
+-- WHAT: Fast local disk on the node, used as a DATA CACHE
+--
+-- WHAT IT DOES IN SNOWFLAKE:
+--   1. CACHES frequently accessed micro-partitions from cloud storage
+--   2. SPILL storage when RAM overflows
+--   3. Stores temporary/intermediate results too large for RAM
+--
+-- ANALOGY:
+--   Local SSD = the chef's REFRIGERATOR
+--   Pre-stores ingredients so you don't have to run to the
+--   grocery store (cloud storage) every time
+--
+-- THE CACHE MECHANISM:
+--
+--   FIRST query: SELECT * FROM big_table WHERE date = '2024-01-01'
+--   ┌─────────────────────────────────────────────────────────┐
+--   │ Step 1: Check Local SSD cache → NOT FOUND (cold cache)  │
+--   │ Step 2: Fetch from S3/Azure/GCS (slow, network I/O)     │
+--   │ Step 3: Store copy on Local SSD for future use           │
+--   │ Step 4: Process data in RAM                              │
+--   │ Total: 10 seconds                                       │
+--   └─────────────────────────────────────────────────────────┘
+--
+--   SECOND query (same data): SELECT COUNT(*) FROM big_table WHERE date = '2024-01-01'
+--   ┌─────────────────────────────────────────────────────────┐
+--   │ Step 1: Check Local SSD cache → FOUND! (warm cache)     │
+--   │ Step 2: Read from local SSD (fast, no network!)         │
+--   │ Step 3: Process data in RAM                              │
+--   │ Total: 2 seconds (5x faster!)                           │
+--   └─────────────────────────────────────────────────────────┘
+--
+-- IMPORTANT BEHAVIORS:
+--   - Cache is per-node (each node caches different partitions)
+--   - Cache is lost when warehouse SUSPENDS (nodes shut down)
+--   - Cache warms up again as queries run after resume
+--   - This is why first query after resume is slower
+--
+-- WHEN LOCAL SSD MATTERS:
+--   - Repeated queries on same tables → cache hit = fast
+--   - Large JOINs that spill from RAM → SSD absorbs overflow
+--   - Interactive/dashboard queries → warm cache = sub-second
+--
+--
+-- ============================================================
+-- HOW ALL THREE WORK TOGETHER DURING A QUERY
+-- ============================================================
+--
+-- Query: SELECT dept, AVG(salary) FROM employees GROUP BY dept
+-- Table: 500 million rows, stored in cloud storage
+--
+-- ┌─────────────────────────────────────────────────────────────┐
+-- │ STEP 1: FETCH DATA                                          │
+-- │                                                             │
+-- │  Cloud Storage (S3)                                         │
+-- │       │                                                     │
+-- │       │ (if not cached: download over network ~200ms)       │
+-- │       ▼                                                     │
+-- │  Local SSD Cache                                            │
+-- │       │                                                     │
+-- │       │ (read from local disk ~2ms)                         │
+-- │       ▼                                                     │
+-- │  RAM (loaded into memory)                                   │
+-- └─────────────────────────────────────────────────────────────┘
+--
+-- ┌─────────────────────────────────────────────────────────────┐
+-- │ STEP 2: PROCESS DATA                                        │
+-- │                                                             │
+-- │  CPU reads data from RAM:                                   │
+-- │    - Scans each row                                         │
+-- │    - Groups by department                                   │
+-- │    - Computes running SUM and COUNT for AVG                 │
+-- │    - Builds hash table in RAM: {dept → (sum, count)}        │
+-- └─────────────────────────────────────────────────────────────┘
+--
+-- ┌─────────────────────────────────────────────────────────────┐
+-- │ STEP 3: IF DATA IS TOO LARGE FOR RAM                        │
+-- │                                                             │
+-- │  RAM is full! (e.g., hash table too large)                  │
+-- │    → CPU spills partial hash table to Local SSD             │
+-- │    → Continues processing next batch in RAM                 │
+-- │    → Later, reads back from SSD to merge results            │
+-- │                                                             │
+-- │  If even Local SSD is full:                                 │
+-- │    → Spills to remote cloud storage (very slow!)            │
+-- └─────────────────────────────────────────────────────────────┘
+--
+-- ┌─────────────────────────────────────────────────────────────┐
+-- │ STEP 4: RETURN RESULTS                                      │
+-- │                                                             │
+-- │  Final results in RAM → sent to user                        │
+-- └─────────────────────────────────────────────────────────────┘
+--
+--
+-- ============================================================
+-- SPEED COMPARISON
+-- ============================================================
+--
+-- | Component       | Speed              | Size (per node) | Purpose              |
+-- |-----------------|--------------------|-----------------|----------------------|
+-- | CPU Registers   | 0.3 nanoseconds    | Bytes           | Active calculation   |
+-- | RAM             | 100 nanoseconds    | ~100-200 GB     | Working memory       |
+-- | Local SSD       | 100 microseconds   | ~1 TB           | Cache + spill        |
+-- | Cloud Storage   | 10-200 milliseconds| Unlimited       | Permanent data store |
+--
+-- RAM is ~1000x faster than SSD
+-- SSD is ~1000x faster than cloud storage
+-- This is why caching and avoiding spills matters enormously!
+--
+--
+-- ============================================================
+-- HOW TO DETECT PROBLEMS (query profile)
+-- ============================================================
+--
+-- Check in Snowsight → Query Profile:
+--
+-- | Metric                          | Meaning                         | Fix                        |
+-- |---------------------------------|---------------------------------|----------------------------|
+-- | Bytes scanned from remote       | Data not cached on SSD          | Keep warehouse running     |
+-- | Bytes spilled to local storage  | RAM overflow → SSD spill        | Increase warehouse SIZE    |
+-- | Bytes spilled to remote storage | Even SSD overflowed!            | Increase SIZE significantly|
+-- | Percentage scanned from cache   | How much came from SSD cache    | Higher = better            |
+--
+--
+-- ============================================================
+-- SUMMARY
+-- ============================================================
+--
+-- | Component  | What it is              | Snowflake use                          | Problem when insufficient        |
+-- |------------|-------------------------|----------------------------------------|----------------------------------|
+-- | CPU        | Processor (brain)       | All computation: filter, join, sort    | Slow queries (no spilling)       |
+-- | RAM        | Fast memory (workspace) | Active data processing + hash tables   | Spills to SSD (query slows down) |
+-- | Local SSD  | Fast local disk (cache) | Caches data + absorbs RAM overflow     | More cloud reads (even slower)   |
+-- |            |                         |                                        | Spills to remote storage         |
+--
+-- BIGGER WAREHOUSE SIZE = more of ALL THREE per cluster
+-- (more CPU cores + more RAM + more SSD per node, AND more nodes)
+-- ============================================================
+
+
+-- ============================================================
+-- LEVEL 11: SNOWFLAKE CACHING — ALL 3 TYPES EXPLAINED
+-- ============================================================
+--
+-- Snowflake has 3 distinct caches, each at a different layer:
+--
+-- ┌─────────────────────────────────────────────────────────────┐
+-- │                SNOWFLAKE ARCHITECTURE                        │
+-- │                                                             │
+-- │  ┌───────────────────────────────────────────────────────┐  │
+-- │  │  LAYER 1: CLOUD SERVICES LAYER                        │  │
+-- │  │  (metadata, query parsing, security, optimization)    │  │
+-- │  │                                                       │  │
+-- │  │  ┌─────────────────────────────────────────────────┐  │  │
+-- │  │  │  CACHE 1: METADATA CACHE (Query Result Cache)   │  │  │
+-- │  │  └─────────────────────────────────────────────────┘  │  │
+-- │  └───────────────────────────────────────────────────────┘  │
+-- │                                                             │
+-- │  ┌───────────────────────────────────────────────────────┐  │
+-- │  │  LAYER 2: COMPUTE LAYER (Virtual Warehouses)          │  │
+-- │  │  (query execution, nodes, clusters)                   │  │
+-- │  │                                                       │  │
+-- │  │  ┌─────────────────────────────────────────────────┐  │  │
+-- │  │  │  CACHE 2: LOCAL DISK CACHE (SSD/Warehouse Cache)│  │  │
+-- │  │  └─────────────────────────────────────────────────┘  │  │
+-- │  └───────────────────────────────────────────────────────┘  │
+-- │                                                             │
+-- │  ┌───────────────────────────────────────────────────────┐  │
+-- │  │  LAYER 3: STORAGE LAYER (Cloud Storage)               │  │
+-- │  │  (S3, Azure Blob, GCS — permanent data)               │  │
+-- │  │                                                       │  │
+-- │  │  ┌─────────────────────────────────────────────────┐  │  │
+-- │  │  │  CACHE 3: METADATA / PARTITION STATISTICS       │  │  │
+-- │  │  │  (min/max values, row counts, null counts)      │  │  │
+-- │  │  └─────────────────────────────────────────────────┘  │  │
+-- │  └───────────────────────────────────────────────────────┘  │
+-- └─────────────────────────────────────────────────────────────┘
+--
+--
+-- ============================================================
+-- CACHE 1: QUERY RESULT CACHE (Cloud Services Layer)
+-- ============================================================
+--
+-- LAYER: Cloud Services
+-- STORED IN: Global metadata store (shared across all warehouses)
+-- DURATION: 24 hours (resets if underlying data changes)
+-- COST: FREE (no warehouse needed!)
+--
+-- HOW IT WORKS:
+--   - Snowflake stores the RESULT of every query for 24 hours
+--   - If the EXACT same query is run again (same SQL text, same data):
+--     → Returns cached result INSTANTLY
+--     → No warehouse required! Zero compute cost!
+--
+-- EXAMPLE:
+--   User A at 9:00 AM:  SELECT COUNT(*) FROM sales; → 1,500,000 (takes 5 sec)
+--   User B at 9:05 AM:  SELECT COUNT(*) FROM sales; → 1,500,000 (instant! cached)
+--   User A at 9:10 AM:  SELECT COUNT(*) FROM sales; → 1,500,000 (still instant)
+--   [INSERT INTO sales VALUES (...)]  ← data changes!
+--   User A at 9:15 AM:  SELECT COUNT(*) FROM sales; → 1,500,001 (re-executes, cache invalidated)
+--
+-- CONDITIONS FOR CACHE HIT:
+--   ✅ Exact same SQL text (case-sensitive, whitespace matters)
+--   ✅ Same role and session context
+--   ✅ Underlying data has NOT changed
+--   ✅ Query does NOT use non-deterministic functions (CURRENT_TIMESTAMP, RANDOM())
+--   ✅ Within 24 hours of original execution
+--
+-- DOES NOT WORK WHEN:
+--   ❌ SELECT * FROM sales;  vs  select * from sales;  (different case!)
+--   ❌ CURRENT_DATE(), RANDOM(), UUID_STRING() in query
+--   ❌ Table was modified (INSERT/UPDATE/DELETE/MERGE)
+--   ❌ More than 24 hours since last execution
+--
+-- ANALOGY:
+--   You ask "What's 247 × 389?" → someone calculates: 96,083
+--   You ask again 5 minutes later → same answer immediately (memorized)
+--   But if the question changes even slightly → must recalculate
+--
+--
+-- ============================================================
+-- CACHE 2: LOCAL DISK CACHE / WAREHOUSE CACHE (Compute Layer)
+-- ============================================================
+--
+-- LAYER: Compute (Virtual Warehouse nodes)
+-- STORED IN: Local SSD on each node
+-- DURATION: As long as warehouse is RUNNING (lost on suspend)
+-- COST: Warehouse must be running (credits consumed)
+--
+-- HOW IT WORKS:
+--   - When a node fetches micro-partitions from cloud storage,
+--     it stores a copy on its local SSD
+--   - Next query needing same partitions reads from SSD (fast!)
+--     instead of cloud storage (slow)
+--   - Uses LRU (Least Recently Used) eviction when SSD is full
+--
+-- EXAMPLE:
+--   Query 1: SELECT * FROM sales WHERE date = '2024-01-05'
+--            → Fetches partitions 45-64 from S3
+--            → Caches them on local SSD
+--            → Takes 8 seconds
+--
+--   Query 2: SELECT SUM(amount) FROM sales WHERE date = '2024-01-05'
+--            → Same partitions needed (45-64)
+--            → Found on local SSD! No cloud fetch!
+--            → Takes 2 seconds (4x faster)
+--
+-- KEY BEHAVIORS:
+--   - Each node caches different partitions (distributed cache)
+--   - Cache survives across different queries (as long as warehouse is up)
+--   - Cache is LOST when warehouse suspends
+--   - Bigger warehouse = more total SSD cache capacity
+--   - Different warehouses do NOT share cache
+--
+-- WAREHOUSE A:                    WAREHOUSE B:
+-- ┌──────────────────┐           ┌──────────────────┐
+-- │ SSD has sales     │           │ SSD is empty     │
+-- │ partitions 45-64  │           │ (just resumed)   │
+-- └──────────────────┘           └──────────────────┘
+-- Same query: 2 seconds           Same query: 8 seconds
+--
+-- ANALOGY:
+--   You work at a desk with papers (RAM) and a filing cabinet (SSD).
+--   First time you need a file → go to the archive building (cloud) → slow
+--   You keep a copy in your cabinet → next time, grab it locally → fast
+--   You leave for the day (suspend) → cabinet emptied (cache lost)
+--
+--
+-- ============================================================
+-- CACHE 3: METADATA CACHE (Cloud Services + Storage Layer)
+-- ============================================================
+--
+-- LAYER: Cloud Services (stored alongside data metadata)
+-- STORED IN: Snowflake's global metadata store
+-- DURATION: Always available (persistent)
+-- COST: FREE (no warehouse needed for metadata-only queries!)
+--
+-- HOW IT WORKS:
+--   - Snowflake maintains statistics about every micro-partition:
+--     • MIN value per column
+--     • MAX value per column
+--     • Row count
+--     • NULL count
+--     • Distinct value count (approximate)
+--   - Some queries can be answered from metadata ALONE
+--     without scanning ANY data
+--
+-- EXAMPLE:
+--   SELECT COUNT(*) FROM sales;
+--   → Snowflake knows row count from metadata
+--   → Returns instantly, NO warehouse scan needed!
+--
+--   SELECT MIN(sale_date), MAX(sale_date) FROM sales;
+--   → MIN/MAX stored in metadata
+--   → Instant response!
+--
+--   SELECT COUNT(*) FROM sales WHERE amount > 100;
+--   → Cannot answer from metadata alone (needs actual filtering)
+--   → Must scan data (uses warehouse)
+--
+-- ALSO USED FOR PRUNING:
+--   SELECT * FROM sales WHERE sale_date = '2024-01-05'
+--   → Metadata says: partition 45 has dates Jan 4-6, partition 46 has Jan 5-7...
+--   → Only fetches relevant partitions (PRUNING)
+--   → This is NOT a cache of results, but a cache of STATISTICS
+--
+-- ANALOGY:
+--   A library catalog tells you "Book X is on shelf 3, row 2"
+--   You don't need to walk every shelf to find it.
+--   The catalog is always available (metadata cache = always persistent)
+--
+--
+-- ============================================================
+-- HOW THE 3 CACHES INTERACT (Query Execution Order)
+-- ============================================================
+--
+-- User submits: SELECT SUM(amount) FROM sales WHERE date = '2024-01-05'
+--
+-- ┌─────────────────────────────────────────────────────────────┐
+-- │ CHECK 1: Query Result Cache (Cloud Services)                │
+-- │                                                             │
+-- │ "Have I seen this exact query before with unchanged data?"  │
+-- │                                                             │
+-- │ YES → Return cached result instantly. DONE. No warehouse.   │
+-- │ NO  → Continue to step 2...                                 │
+-- └─────────────────────────────────────────────────────────────┘
+--        │ (cache miss)
+--        ▼
+-- ┌─────────────────────────────────────────────────────────────┐
+-- │ CHECK 2: Metadata Cache (Cloud Services)                    │
+-- │                                                             │
+-- │ "Can I answer this from statistics alone?"                  │
+-- │   - COUNT(*) without WHERE → YES, return from metadata      │
+-- │   - SUM with WHERE filter → NO, need data scan              │
+-- │                                                             │
+-- │ "Which partitions do I need?" (PRUNING using metadata)      │
+-- │   - date = '2024-01-05' → partitions 45-64 (out of 1000)   │
+-- └─────────────────────────────────────────────────────────────┘
+--        │ (need to scan 20 partitions)
+--        ▼
+-- ┌─────────────────────────────────────────────────────────────┐
+-- │ CHECK 3: Local Disk Cache (Warehouse Node SSD)              │
+-- │                                                             │
+-- │ "Are partitions 45-64 already on my local SSD?"             │
+-- │                                                             │
+-- │ Partition 45-50: ON SSD (cache hit!) → read locally         │
+-- │ Partition 51-64: NOT on SSD (cache miss) → fetch from cloud │
+-- │                                                             │
+-- │ Fetch missing partitions + cache them on SSD for next time  │
+-- └─────────────────────────────────────────────────────────────┘
+--        │ (data now in RAM)
+--        ▼
+-- ┌─────────────────────────────────────────────────────────────┐
+-- │ EXECUTE: CPU processes data in RAM                           │
+-- │                                                             │
+-- │ Filter + Aggregate → SUM(amount) = $325,000                 │
+-- │                                                             │
+-- │ Store result in Query Result Cache for next 24 hours        │
+-- │ Return result to user                                       │
+-- └─────────────────────────────────────────────────────────────┘
+--
+--
+-- ============================================================
+-- COMPARISON TABLE
+-- ============================================================
+--
+-- | Cache              | Layer           | What it stores         | Duration          | Lost when           | Cost            | Shared across WH? |
+-- |--------------------|-----------------|------------------------|-------------------|---------------------|-----------------|-------------------|
+-- | Query Result Cache | Cloud Services  | Full query results     | 24 hours          | Data changes        | Free            | Yes               |
+-- | Local Disk Cache   | Compute (nodes) | Raw micro-partitions   | While WH running  | Warehouse suspends  | WH must be on   | No                |
+-- | Metadata Cache     | Cloud Services  | Partition statistics   | Always (permanent)| Never (auto-updated)| Free            | Yes               |
+--
+--
+-- ============================================================
+-- PRACTICAL IMPACT
+-- ============================================================
+--
+-- SCENARIO 1: Dashboard refreshes every 5 minutes, same queries
+-- → Query Result Cache handles it (FREE, instant, no warehouse)
+--
+-- SCENARIO 2: Analyst explores same table with different filters
+-- → Local Disk Cache helps (partitions already on SSD from prior queries)
+--
+-- SCENARIO 3: COUNT(*) on a 10 billion row table
+-- → Metadata Cache answers instantly (no scan needed!)
+--
+-- SCENARIO 4: Query on table that was just updated
+-- → Result cache INVALIDATED → must re-scan
+-- → But SSD cache still has partitions (only new/changed ones need re-fetch)
+--
+--
+-- ============================================================
+-- HOW TO MAXIMIZE CACHE BENEFITS
+-- ============================================================
+--
+-- | Cache              | How to maximize                                              |
+-- |--------------------|--------------------------------------------------------------|
+-- | Query Result Cache | Use consistent SQL text (same casing, spacing)               |
+-- |                    | Avoid CURRENT_TIMESTAMP in queries (kills cache)             |
+-- |                    | Schedule reports before data loads (cache still valid)        |
+-- | Local Disk Cache   | Don't suspend warehouse too aggressively (AUTO_SUSPEND > 5m) |
+-- |                    | Route similar queries to same warehouse                      |
+-- |                    | Larger warehouse = more SSD = more cache capacity            |
+-- | Metadata Cache     | Use clustering keys aligned with query filters               |
+-- |                    | Keep tables well-clustered (better pruning statistics)        |
+-- |                    | Use COUNT(*), MIN(), MAX() without filters when possible     |
+-- ============================================================
