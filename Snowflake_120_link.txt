@@ -1,0 +1,1 @@
+https://signup.snowflake.com/?trial=student&cloud=aws&region=us-west-2&utm_source=coursera&utm_campaign=genai1

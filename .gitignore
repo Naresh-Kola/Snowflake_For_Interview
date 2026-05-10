@@ -1,0 +1,30 @@
+# Large files
+*.jar
+*.exe
+*.dll
+*.so
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+env/
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Sensitive files
+*.p8
+*.key
+*.pem
