@@ -1,0 +1,137 @@
+﻿%-------------------------
+% Resume in Latex
+% Author: Kola Naresh
+%------------------------
+
+\documentclass[letterpaper,11pt]{article}
+
+\usepackage{latexsym}
+\usepackage[empty]{fullpage}
+\usepackage{titlesec}
+\usepackage{marvosym}
+\usepackage[usenames,dvipsnames]{color}
+\usepackage{verbatim}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+\usepackage{fancyhdr}
+\usepackage[english]{babel}
+\usepackage{tabularx}
+\usepackage{fontawesome5}
+\usepackage{multicol}
+\setlength{\multicolsep}{-3.0pt}
+\setlength{\columnsep}{-1pt}
+\input{glyphtounicode}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyfoot{}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+
+\addtolength{\oddsidemargin}{-0.6in}
+\addtolength{\evensidemargin}{-0.5in}
+\addtolength{\textwidth}{1.19in}
+\addtolength{\topmargin}{-.7in}
+\addtolength{\textheight}{1.4in}
+
+\urlstyle{same}
+\raggedbottom
+\raggedright
+\setlength{\tabcolsep}{0in}
+
+\titleformat{\section}{
+  \vspace{-6pt}\scshape\raggedright\large\bfseries
+}{}{0em}{}[\color{black}\titlerule \vspace{-5pt}]
+
+\pdfgentounicode=1
+
+\newcommand{\resumeItem}[1]{\item\small{{#1 \vspace{-2pt}}}}
+\newcommand{\resumeSubheading}[4]{
+  \vspace{-2pt}\item
+    \begin{tabular*}{1.0\textwidth}[t]{l@{\extracolsep{\fill}}r}
+      \textbf{#1} & \textbf{\small #2} \\
+      \textit{\small#3} & \textit{\small #4} \\
+    \end{tabular*}\vspace{-6pt}
+}
+\newcommand{\resumeProjectHeading}[2]{
+    \item
+    \begin{tabular*}{1.001\textwidth}{l@{\extracolsep{\fill}}r}
+      \small#1 & \textbf{\small #2}\\
+    \end{tabular*}\vspace{-6pt}
+}
+\newcommand{\resumeItemListStart}{\begin{itemize}}
+\newcommand{\resumeItemListEnd}{\end{itemize}\vspace{-5pt}}
+\newcommand{\resumeSubHeadingListStart}{\begin{itemize}[leftmargin=0.0in, label={}]}
+\newcommand{\resumeSubHeadingListEnd}{\end{itemize}}
+
+\begin{document}
+
+%----------HEADING----------
+\begin{center}
+    {\Huge \scshape Kola Naresh} \\ \vspace{4pt}
+    \textbf{\Large \scshape Data Engineer} \\ \vspace{4pt}
+    \small \faPhone\ +91-9014053988 ~
+    \href{mailto:its.naresh.kola@gmail.com}{\faEnvelope\ \underline{its.naresh.kola@gmail.com}} ~
+    \href{https://www.linkedin.com/in/naresh-kola-54165b1b2/}{\faLinkedin\ \underline{linkedin.com/in/naresh-kola-54165b1b2/}}
+\end{center}
+
+%-----------SUMMARY-----------
+\section{Summary}
+Data Engineer with over three years of experience in building end-to-end data pipelines across real-time streaming, micro-batch, and batch ingestion patterns. Proficient in event-driven architectures, change data capture, schema evolution, low-latency ingestion, incremental transformations, slowly changing dimensions, and data quality enforcement. Experienced in workflow orchestration, DAG management, idempotent pipeline design, fault tolerance, exactly-once delivery, data lineage, observability, and SLA compliance. Focused on delivering scalable, production-grade data solutions with strong data integrity and governance across the full data lifecycle.
+
+%-----------SKILLS-----------
+\section{Skills}
+
+\textbf{Cloud and Data Warehousing:} Snowflake, AWS, Greenplum, Table Formats \\
+
+\textbf{Data Pipelines and Orchestration:} Apache Kafka, Kafka Connect, Informatica PowerCenter, dbt Core, Apache Airflow, Pipeline Orchestration \\
+
+\textbf{Programming and Querying:} SQL, Python, C, C++ \\
+
+\textbf{Data Quality and Governance:} Metadata-Driven Frameworks, Jinja Macros, Rule Catalogs, Audit Logging, Reconciliation, Unit Testing \\
+
+\textbf{Data Modeling:} Medallion Architecture, Data Lakehouse, Star Schema, CUNA Banking Data Model \\
+
+\textbf{DevOps and Version Control:} Git, Docker \\
+
+%-----------EXPERIENCE-----------
+\section{Experience}
+\resumeSubHeadingListStart
+
+  \resumeSubheading
+    {Data Engineer}{September 2023 -- Present}
+    {Innova Solutions, Hyderabad}{}
+
+  \resumeSubheading
+    {Project: Fideliscare -- Greenplum to Snowflake Migration}{September 2024 -- Present}
+    {}{}
+    \resumeItemListStart
+      \resumeItem{Migrated \textbf{over 80 terabytes of enterprise data from Greenplum to Snowflake} by designing automated ETL workflows in Python with Amazon S3, incorporating data validation, error handling, and row-level reconciliation at every stage of the pipeline.}
+      \resumeItem{Implemented \textbf{Snowflake Streams and Tasks for real-time change data capture} and applied Time Travel and Zero-Copy Cloning to support data recovery, regression testing, and on-demand environment provisioning.}
+      \resumeItem{Enabled \textbf{secure cross-environment data access using Snowflake Data Sharing}, eliminating data duplication and reducing storage overhead across development, staging, and production environments.}
+      \resumeItem{Developed \textbf{reusable modules for extraction, transformation, and validation}, standardizing migration patterns across over 100 tables and reducing overall migration effort while maintaining end-to-end data integrity.}
+      \resumeItem{Performed \textbf{query performance tuning using Query Profile and clustering keys}, optimized warehouse sizing for cost efficiency, and managed schema deployments through Git-based CI/CD pipelines in coordination with cross-functional teams.}
+    \resumeItemListEnd
+
+  \resumeSubheading
+    {Project: Tech Credit Union -- Medallion Data Warehouse}{September 2023 -- August 2024}
+    {}{}
+    \resumeItemListStart
+      \resumeItem{Architected a \textbf{three-layer Medallion data lakehouse using Bronze, Silver, and Gold zones} with Apache Iceberg external tables serving as an immutable ingestion layer, reducing data access time for analysts by 30 percent.}
+      \resumeItem{Designed a \textbf{metadata-driven data quality framework in dbt Core} with control tables, audit logging, and Jinja macros, replacing hard-coded validations across over 50 rules and reducing the data defect rate by 40 percent.}
+      \resumeItem{Modeled a \textbf{CUNA-compliant banking data structure} supporting consistent financial analysis across five business domains and delivered an end-to-end pipeline architecture spanning ingestion, transformation, and serving layers.}
+      \resumeItem{Orchestrated \textbf{incremental and full-refresh pipelines using dbt Core and Apache Airflow}, managing DAG dependencies, scheduling, and retry logic across Bronze-to-Gold transformation layers.}
+      \resumeItem{Implemented \textbf{SCD Type-2 tracking and reconciliation checks on dimension tables}, ensuring historical accuracy and auditability for regulatory compliance reporting.}
+    \resumeItemListEnd
+
+\resumeSubHeadingListEnd
+
+%-----------EDUCATION-----------
+\section{Education}
+\resumeSubHeadingListStart
+  \resumeSubheading
+    {Bachelor of Engineering in Electronics and Communication Engineering}{Graduated: 2023}
+    {KL University, Vijayawada}{CGPA: 8.62 out of 10}
+\resumeSubHeadingListEnd
+
+\end{document}

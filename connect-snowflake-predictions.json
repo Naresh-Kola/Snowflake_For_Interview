@@ -1,0 +1,22 @@
+{
+  "name": "snowflake-predictions",
+  "config": {
+    "connector.class": "com.snowflake.kafka.connector.SnowflakeSinkConnector",
+    "snowflake.url.name": "ekjguym-fl96854.snowflakecomputing.com",
+    "snowflake.user.name": "KAFKA_CONNECTOR_USER",
+    "snowflake.private.key": "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCyQjHWYoR8I7je3ZRwF1h8L6XCLrvmrEykXjUtVxCH+I8GLj0KCz0nDx6b006yLNXuFOCRwsnNMDjzIiQZbqXMEC+z8ghwMlDdgpt/vj9eyvr6ThVdWAXUvo8jMZwrhksuxOIDbGuFK5RbiczRaCUs+nThKBreFP5zzn0+IG+zP20WpY3SIj5YkR0lsnNWPxphBSmez21ubID1g1hFSeJLLfQOxyLMsrIG9wqH8hx8VcwYePql4pRg1Pd2pOIrB1/fJ9SafJsO0GVPOvQjSp4VBqFHe6Gx6geH2tm5yry6wdvYtexgPPJ6KCNt9DndJ6/zN8wj0gfjPI9jpxXW9FGnAgMBAAECggEAGhgvPCc50QOtrrpDCNGcu2PXi6spsyUqfFk/cZQFhdIF+y1OSX0cW5kOra2WHzu0VAuBqvTCc84JAtZ5mwYj29Ehb+G7XdPlGzgLqVHhQZrMeKhw34mLePmC8e+eNo+Mdpvi9gYAtgLgzzGckP8CNNOzw7i0435b7U9J7Yv0A19uSa+sVOIPmUsvh5zNzPhK+WsGApSwFfmlVdVnovEs2CHBNAxpKmAsEUDeYR4zJVqgI9BHISIFzV4drA/tSXj3L13KIVIBubgVskTcRFnbInb23fZd7FF2ku7uIFPO4hPgJFHbPG0geZREuL2TCKW6dolzy58G+ZFucKd7vRv8QQKBgQDuR0hnXVDSrW1DP9LrBbA6upf3SkCRGBQGuxHHTWmYlMhQ3ti8JuPL3Kc+jbOiQgQuR4H6mt3/CCN5GnRvUHL8d2V0AqXxM2uY7dG6PvL33FSaB9oM6/R+Pl7xCyW+hiGNwJdbEWkc/Aq9tyQ1OMCjwUDfSR+MXxOGiyKkmIyLRwKBgQC/hCjknspzt7tcOrPUlZjB17QcqhJH3bjaTjk9tD7TvfWZWtmQUQFmjLvgvPz6cuC2BmS1qbtdDM4yJ2sgftmko7XrmPJcTVKmnylP2PQs2A0em6+H+2yRnGDrrofW2W0AzW4gEfNy1LiVw2rdNLDTop5wsL7QACRx1AubAbJ2oQKBgQCDzQQ8wL5DOtD0YOpvO/9GDQ6gJ/9dAr+ZFYL5BlYBo1LGgO3L7YsVqeEM1d7mQrQDUWSRVXa0ajEM/Ngo9owUIIsKx6g4qiO7PNlEtys4dTSK2wr/GMltx1xG4s6m+5S1zzEpm5DUCop6dEJf+ht8uRoEKHN99t1bD71C5GrhYwKBgElfRJtyCnYS6gEHrGXBemipTyO8NIy78VoRpfRx3bAZksJSABA+OJ8lQ8VyIimBYX3bLTI7+MBJa6XjXDNy5cchwUylqBScuxGC4LzqjYGwtDYJx1H9jTasBqXEk95IJm6sRYib1/0iaiVWXNaqnSQ3pSPfUvs1UsEZT+ju2YSBAoGAMspsAQgW6NqIFu0yOjOk+PfXsbEZGImzBMReWXUA6SDzv5WlyVNWJZJfGy3OdyvaUoB1hs/CNACI7DeYv/rArLjrKcL6hz5R0gpE5hpILgIrRwu671E7dh8FqxwcCxNItHw3NlrQBZ7esxxxEt3TePnQrtDSLHkA379ajg3D7IQ=",
+    "snowflake.database.name": "WEATHER_PIPELINE",
+    "snowflake.schema.name": "KAFKA_DATA",
+    "snowflake.role.name": "KAFKA_CONNECTOR_ROLE",
+    "snowflake.ingestion.method": "SNOWPIPE_STREAMING",
+    "snowflake.enable.schematization": "true",
+    "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter.schemas.enable": "false",
+    "topics": "weather-predictions",
+    "snowflake.topic2table.map": "weather-predictions:WEATHER_PREDICTIONS",
+    "tasks.max": "1",
+    "buffer.count.records": "100",
+    "buffer.flush.time": "30"
+  }
+}

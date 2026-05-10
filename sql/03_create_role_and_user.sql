@@ -1,0 +1,27 @@
+-- ============================================
+-- Step 3: Create Role and User for Connector
+-- ============================================
+-- Principle of least privilege: the connector gets
+-- only the permissions it needs (INSERT, SELECT).
+
+-- Create a dedicated role
+CREATE ROLE IF NOT EXISTS KAFKA_CONNECTOR_ROLE;
+
+-- Grant database and schema access
+GRANT USAGE ON DATABASE WEATHER_PIPELINE TO ROLE KAFKA_CONNECTOR_ROLE;
+GRANT USAGE ON SCHEMA WEATHER_PIPELINE.KAFKA_DATA TO ROLE KAFKA_CONNECTOR_ROLE;
+
+-- Grant table permissions (current + future)
+GRANT INSERT, SELECT ON ALL TABLES IN SCHEMA WEATHER_PIPELINE.KAFKA_DATA TO ROLE KAFKA_CONNECTOR_ROLE;
+GRANT INSERT, SELECT ON FUTURE TABLES IN SCHEMA WEATHER_PIPELINE.KAFKA_DATA TO ROLE KAFKA_CONNECTOR_ROLE;
+GRANT CREATE TABLE ON SCHEMA WEATHER_PIPELINE.KAFKA_DATA TO ROLE KAFKA_CONNECTOR_ROLE;
+
+-- Create a dedicated user (no password -- key pair auth only)
+CREATE USER IF NOT EXISTS KAFKA_CONNECTOR_USER
+    DEFAULT_ROLE = KAFKA_CONNECTOR_ROLE
+    DEFAULT_WAREHOUSE = COMPUTE_WH
+    COMMENT = 'Service account for Kafka Snowpipe Streaming connector';
+
+-- Assign role and warehouse access
+GRANT ROLE KAFKA_CONNECTOR_ROLE TO USER KAFKA_CONNECTOR_USER;
+GRANT USAGE ON WAREHOUSE COMPUTE_WH TO ROLE KAFKA_CONNECTOR_ROLE;
