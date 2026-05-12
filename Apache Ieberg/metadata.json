@@ -1,0 +1,302 @@
+{
+    "format-version": 2,
+    "table-uuid": "1f951f98-fb24-4b18-bd51-af11ceb129ae",
+    "location": "s3://iceberg-tables-for-demo/tables/employees.FVVZNejE",
+    "last-sequence-number": 6,
+    "last-updated-ms": 1776954332988,
+    "last-column-id": 6,
+    "current-schema-id": 0,
+    "schemas": [
+        {
+            "type": "struct",
+            "schema-id": 0,
+            "fields": [
+                {
+                    "id": 1,
+                    "name": "EMP_ID",
+                    "required": false,
+                    "type": "int"
+                },
+                {
+                    "id": 2,
+                    "name": "FIRST_NAME",
+                    "required": false,
+                    "type": "string"
+                },
+                {
+                    "id": 3,
+                    "name": "LAST_NAME",
+                    "required": false,
+                    "type": "string"
+                },
+                {
+                    "id": 4,
+                    "name": "DEPARTMENT",
+                    "required": false,
+                    "type": "string"
+                },
+                {
+                    "id": 5,
+                    "name": "SALARY",
+                    "required": false,
+                    "type": "decimal(10, 2)"
+                },
+                {
+                    "id": 6,
+                    "name": "HIRE_DATE",
+                    "required": false,
+                    "type": "date"
+                }
+            ]
+        }
+    ],
+    "default-spec-id": 0,
+    "partition-specs": [
+        {
+            "spec-id": 0,
+            "fields": []
+        }
+    ],
+    "last-partition-id": 999,
+    "default-sort-order-id": 0,
+    "sort-orders": [
+        {
+            "order-id": 0,
+            "fields": []
+        }
+    ],
+    "properties": {
+        "history.expire.max-snapshot-age-ms": "86400000",
+        "snowflake.operation.1.1776954331045000000": "{\"ts\":1776954332988}"
+    },
+    "current-snapshot-id": 952708636174667076,
+    "refs": {
+        "main": {
+            "snapshot-id": 952708636174667076,
+            "type": "branch"
+        }
+    },
+    "snapshots": [
+        {
+            "sequence-number": 1,
+            "snapshot-id": 4548045929630430258,
+            "timestamp-ms": 1776939362348,
+            "summary": {
+                "operation": "append",
+                "manifests-created": "1",
+                "manifests-kept": "0",
+                "manifests-replaced": "0",
+                "snowflake.operation.1.1776939362348000000": "{\"ts\":1776939363459}",
+                "added-data-files": "1",
+                "added-records": "1",
+                "added-files-size": "1536",
+                "changed-partition-count": "1",
+                "total-records": "1",
+                "total-files-size": "1536",
+                "total-data-files": "1",
+                "total-delete-files": "0",
+                "total-position-deletes": "0",
+                "total-equality-deletes": "0",
+                "iceberg-version": "Apache Iceberg unspecified (commit 0ba0141c1a84b5bb0ddfee0c689ee2d64b2c9686)"
+            },
+            "manifest-list": "s3://iceberg-tables-for-demo/tables/employees.FVVZNejE/metadata/snap-4548045929630430258-1-948c1df5-274b-4532-b10c-e69c60bf54a8.avro",
+            "schema-id": 0
+        },
+        {
+            "sequence-number": 2,
+            "snapshot-id": 5211824387971104983,
+            "parent-snapshot-id": 4548045929630430258,
+            "timestamp-ms": 1776940227293,
+            "summary": {
+                "operation": "append",
+                "manifests-created": "1",
+                "manifests-kept": "1",
+                "manifests-replaced": "0",
+                "snowflake.operation.1.1776940227293000000": "{\"ts\":1776940228645}",
+                "added-data-files": "1",
+                "added-records": "7",
+                "added-files-size": "4096",
+                "changed-partition-count": "1",
+                "total-records": "8",
+                "total-files-size": "5632",
+                "total-data-files": "2",
+                "total-delete-files": "0",
+                "total-position-deletes": "0",
+                "total-equality-deletes": "0",
+                "iceberg-version": "Apache Iceberg unspecified (commit 0ba0141c1a84b5bb0ddfee0c689ee2d64b2c9686)"
+            },
+            "manifest-list": "s3://iceberg-tables-for-demo/tables/employees.FVVZNejE/metadata/snap-5211824387971104983-1-679ac87e-43bd-406f-b9b1-fcf6c2f207a0.avro",
+            "schema-id": 0
+        },
+        {
+            "sequence-number": 3,
+            "snapshot-id": 6073763692231315285,
+            "parent-snapshot-id": 5211824387971104983,
+            "timestamp-ms": 1776948595642,
+            "summary": {
+                "operation": "overwrite",
+                "snowflake.operation.1.1776948595642000000": "{\"ts\":1776948596531}",
+                "manifests-created": "2",
+                "manifests-kept": "1",
+                "manifests-replaced": "1",
+                "added-data-files": "1",
+                "deleted-data-files": "1",
+                "added-records": "1",
+                "deleted-records": "1",
+                "added-files-size": "1536",
+                "removed-files-size": "1536",
+                "changed-partition-count": "1",
+                "total-records": "8",
+                "total-files-size": "5632",
+                "total-data-files": "2",
+                "total-delete-files": "0",
+                "total-position-deletes": "0",
+                "total-equality-deletes": "0",
+                "iceberg-version": "Apache Iceberg unspecified (commit 0ba0141c1a84b5bb0ddfee0c689ee2d64b2c9686)"
+            },
+            "manifest-list": "s3://iceberg-tables-for-demo/tables/employees.FVVZNejE/metadata/snap-6073763692231315285-1-c84e28cc-1c56-4f05-b857-343ca9f962cb.avro",
+            "schema-id": 0
+        },
+        {
+            "sequence-number": 4,
+            "snapshot-id": 227587754651110676,
+            "parent-snapshot-id": 6073763692231315285,
+            "timestamp-ms": 1776948896239,
+            "summary": {
+                "operation": "overwrite",
+                "manifests-created": "2",
+                "manifests-kept": "1",
+                "manifests-replaced": "1",
+                "snowflake.operation.1.1776948896239000000": "{\"ts\":1776948897573}",
+                "added-data-files": "1",
+                "deleted-data-files": "1",
+                "added-records": "7",
+                "deleted-records": "7",
+                "added-files-size": "4096",
+                "removed-files-size": "4096",
+                "changed-partition-count": "1",
+                "total-records": "8",
+                "total-files-size": "5632",
+                "total-data-files": "2",
+                "total-delete-files": "0",
+                "total-position-deletes": "0",
+                "total-equality-deletes": "0",
+                "iceberg-version": "Apache Iceberg unspecified (commit 0ba0141c1a84b5bb0ddfee0c689ee2d64b2c9686)"
+            },
+            "manifest-list": "s3://iceberg-tables-for-demo/tables/employees.FVVZNejE/metadata/snap-227587754651110676-1-cc03f8e5-d3af-4d7d-9476-676d7fa352db.avro",
+            "schema-id": 0
+        },
+        {
+            "sequence-number": 5,
+            "snapshot-id": 1953664931446045509,
+            "parent-snapshot-id": 227587754651110676,
+            "timestamp-ms": 1776953562708,
+            "summary": {
+                "operation": "overwrite",
+                "snowflake.operation.1.1776953562708000000": "{\"ts\":1776953563806}",
+                "manifests-created": "2",
+                "manifests-kept": "1",
+                "manifests-replaced": "1",
+                "added-data-files": "1",
+                "deleted-data-files": "1",
+                "added-records": "7",
+                "deleted-records": "7",
+                "added-files-size": "4096",
+                "removed-files-size": "4096",
+                "changed-partition-count": "1",
+                "total-records": "8",
+                "total-files-size": "5632",
+                "total-data-files": "2",
+                "total-delete-files": "0",
+                "total-position-deletes": "0",
+                "total-equality-deletes": "0",
+                "iceberg-version": "Apache Iceberg unspecified (commit 0ba0141c1a84b5bb0ddfee0c689ee2d64b2c9686)"
+            },
+            "manifest-list": "s3://iceberg-tables-for-demo/tables/employees.FVVZNejE/metadata/snap-1953664931446045509-1-5a28b94f-55d3-4794-a905-990d29c27b37.avro",
+            "schema-id": 0
+        },
+        {
+            "sequence-number": 6,
+            "snapshot-id": 952708636174667076,
+            "parent-snapshot-id": 1953664931446045509,
+            "timestamp-ms": 1776954331045,
+            "summary": {
+                "operation": "overwrite",
+                "manifests-created": "2",
+                "manifests-kept": "1",
+                "manifests-replaced": "1",
+                "snowflake.operation.1.1776954331045000000": "{\"ts\":1776954332305}",
+                "added-data-files": "1",
+                "deleted-data-files": "1",
+                "added-records": "6",
+                "deleted-records": "7",
+                "added-files-size": "4096",
+                "removed-files-size": "4096",
+                "changed-partition-count": "1",
+                "total-records": "7",
+                "total-files-size": "5632",
+                "total-data-files": "2",
+                "total-delete-files": "0",
+                "total-position-deletes": "0",
+                "total-equality-deletes": "0",
+                "iceberg-version": "Apache Iceberg unspecified (commit 0ba0141c1a84b5bb0ddfee0c689ee2d64b2c9686)"
+            },
+            "manifest-list": "s3://iceberg-tables-for-demo/tables/employees.FVVZNejE/metadata/snap-952708636174667076-1-b1a58ec9-a8df-4f16-b56b-ac3b6ed24470.avro",
+            "schema-id": 0
+        }
+    ],
+    "statistics": [],
+    "partition-statistics": [],
+    "snapshot-log": [
+        {
+            "timestamp-ms": 1776939362348,
+            "snapshot-id": 4548045929630430258
+        },
+        {
+            "timestamp-ms": 1776940227293,
+            "snapshot-id": 5211824387971104983
+        },
+        {
+            "timestamp-ms": 1776948595642,
+            "snapshot-id": 6073763692231315285
+        },
+        {
+            "timestamp-ms": 1776948896239,
+            "snapshot-id": 227587754651110676
+        },
+        {
+            "timestamp-ms": 1776953562708,
+            "snapshot-id": 1953664931446045509
+        },
+        {
+            "timestamp-ms": 1776954331045,
+            "snapshot-id": 952708636174667076
+        }
+    ],
+    "metadata-log": [
+        {
+            "timestamp-ms": 1776938909312,
+            "metadata-file": "s3://iceberg-tables-for-demo/tables/employees.FVVZNejE/metadata/00000-e15f9814-f6d6-4cc0-9423-03292603d56c.metadata.json"
+        },
+        {
+            "timestamp-ms": 1776939363710,
+            "metadata-file": "s3://iceberg-tables-for-demo/tables/employees.FVVZNejE/metadata/00001-869dc720-5381-479c-a926-73c43a820851.metadata.json"
+        },
+        {
+            "timestamp-ms": 1776940228951,
+            "metadata-file": "s3://iceberg-tables-for-demo/tables/employees.FVVZNejE/metadata/00002-512c414c-3199-474b-a252-27f4b6a891b7.metadata.json"
+        },
+        {
+            "timestamp-ms": 1776948597251,
+            "metadata-file": "s3://iceberg-tables-for-demo/tables/employees.FVVZNejE/metadata/00003-fcfa7d88-db06-4034-bf6d-1df567e3518e.metadata.json"
+        },
+        {
+            "timestamp-ms": 1776948898200,
+            "metadata-file": "s3://iceberg-tables-for-demo/tables/employees.FVVZNejE/metadata/00004-d3c43b7d-1b2a-4582-b644-4277322cb2aa.metadata.json"
+        },
+        {
+            "timestamp-ms": 1776953564684,
+            "metadata-file": "s3://iceberg-tables-for-demo/tables/employees.FVVZNejE/metadata/00005-877dee16-7f44-4420-9737-5fb682ee9265.metadata.json"
+        }
+    ]
+}
