@@ -551,3 +551,5 @@ CHECK constraints support **any deterministic scalar expression**:
 ---
 
 *Built with Snowflake CHECK Constraints, Error Tables, and Cortex Code Skills.*
+
+https://www.snowflake.com/en/engineering-blog/snowflake-check-constraints-error-tables/?utm_campaign=&utm_content=1778608047&utm_medium=Snowflake+Developers&utm_source=linkedin
