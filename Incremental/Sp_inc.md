@@ -422,7 +422,7 @@ FROM (
     SELECT *,
            ROW_NUMBER() OVER (
                PARTITION BY customer_id
-               ORDER BY _src_ts DESC
+               ORDER BY _src_ts ASC
            ) AS rn
     FROM   raw.stg_customer
     WHERE  _batch_id = :p_batch_id
