@@ -447,3 +447,61 @@ Every phase of this debug flow is powered by a specific table:
 
 This is why the logging design is not just an audit requirement — it is the operational
 backbone that makes fast, confident incident resolution possible.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+----------------------------------------------#####Second Scenario-------------------------------------------------------------
+
+-- Check Snowflake stored procedure execution history
+SELECT
+    QUERY_TEXT,
+    ERROR_MESSAGE,
+    START_TIME,
+    END_TIME,
+    TOTAL_ELAPSED_TIME / 1000   AS Duration_Seconds,
+    BYTES_SCANNED,
+    ROWS_PRODUCED
+FROM TABLE(INFORMATION_SCHEMA.QUERY_HISTORY())
+WHERE QUERY_TEXT    ILIKE '%CALL SP_%'
+  AND START_TIME    >= DATEADD('hour', -6, CURRENT_TIMESTAMP())
+ORDER BY START_TIME DESC;
+
+-- Check row counts at each stage of the transformation
+SELECT 'staging'     AS layer, COUNT(*) AS rows FROM staging_table    WHERE batch_date = CURRENT_DATE()
+UNION ALL
+SELECT 'transformed' AS layer, COUNT(*) AS rows FROM transform_table  WHERE batch_date = CURRENT_DATE()
+UNION ALL
+SELECT 'target'      AS layer, COUNT(*) AS rows FROM target_table     WHERE batch_date = CURRENT_DATE();
+-- Each layer should have similar counts. Big drop = data lost in transformation.
+
+-- Check for duplicate records in staging that could cause downstream issues
+SELECT
+    business_key,
+    COUNT(*) AS duplicate_count
+FROM staging_table
+WHERE batch_date = CURRENT_DATE()
+GROUP BY business_key
+HAVING COUNT(*) > 1
+ORDER BY duplicate_count DESC
+LIMIT 20;
+
+-- Check for unexpected NULLs in critical columns
+SELECT
+    COUNT(*)                                            AS total_rows,
+    SUM(CASE WHEN customer_id    IS NULL THEN 1 END)   AS null_customer_id,
+    SUM(CASE WHEN transaction_dt IS NULL THEN 1 END)   AS null_transaction_dt,
+    SUM(CASE WHEN amount         IS NULL THEN 1 END)   AS null_amount
+FROM staging_table
+WHERE batch_date = CURRENT_DATE();
