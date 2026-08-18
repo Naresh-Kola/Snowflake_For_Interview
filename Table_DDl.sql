@@ -1,0 +1,4 @@
+CREATE OR REPLACE TABLE TABLE_1
+(
+id int
+);
